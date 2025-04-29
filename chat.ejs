@@ -1,0 +1,129 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhisperNet - Anonymous Chat</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="/socket.io/socket.io.js" defer></script>
+    <script defer>
+        document.addEventListener('DOMContentLoaded', () => {
+            const messagesContainer = document.getElementById('messages');
+            const messageForm = document.getElementById('message-form');
+            const messageInput = document.getElementById('message-input');
+            const userStatus = document.getElementById('user-status');
+            const userIdDisplay = document.getElementById('user-id');
+            const messagesEndRef = document.createElement('div');
+            messagesContainer.appendChild(messagesEndRef);
+
+            const generateAnonymousId = () => {
+                const randomNum = Math.floor(1000 + Math.random() * 9000);
+                return `User#${randomNum}`;
+            };
+
+            const userId = generateAnonymousId();
+            userIdDisplay.textContent = userId;
+            userStatus.textContent = 'Connecting...';
+
+            const socket = io();
+
+            const scrollToBottom = () => {
+                messagesEndRef.scrollIntoView({ behavior: 'smooth' });
+            };
+
+            socket.on('connect', () => {
+                console.log('Connected to server:', socket.id);
+                userStatus.textContent = 'Online (0)';
+                socket.emit('userId', userId);
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+                userStatus.textContent = 'Offline';
+            });
+
+            socket.on('connect_error', (err) => {
+                console.error('Connection error:', err.message);
+                userStatus.textContent = 'Connection Failed';
+            });
+
+            socket.on('userCount', (count) => {
+                if (socket.connected) {
+                    userStatus.textContent = `Online (${count})`;
+                }
+            });
+
+            socket.on('chatMessage', (msg) => {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('message');
+                messageElement.classList.add('message-fade-in');
+
+                const isOwnMessage = msg.user === userId;
+                messageElement.classList.add(isOwnMessage ? 'own-message' : 'other-message');
+
+                const userLabel = document.createElement('span');
+                userLabel.classList.add('message-user');
+                userLabel.textContent = isOwnMessage ? 'You' : msg.user;
+
+                const textElement = document.createElement('p');
+                textElement.classList.add('message-text');
+                textElement.textContent = msg.text;
+
+                const timeElement = document.createElement('span');
+                timeElement.classList.add('message-time');
+                timeElement.textContent = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                messageElement.appendChild(userLabel);
+                messageElement.appendChild(textElement);
+                messageElement.appendChild(timeElement);
+
+                messagesContainer.insertBefore(messageElement, messagesEndRef);
+                scrollToBottom();
+            });
+
+            socket.on('error', (errorMessage) => {
+                console.error('Server Error:', errorMessage);
+                const errorElement = document.createElement('div');
+                errorElement.classList.add('message', 'system-message', 'error-message');
+                errorElement.textContent = `System Error: ${errorMessage}`;
+                messagesContainer.insertBefore(errorElement, messagesEndRef);
+                scrollToBottom();
+            });
+
+            messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const messageText = messageInput.value.trim();
+                if (messageText && socket.connected) {
+                    socket.emit('chatMessage', messageText);
+                    messageInput.value = '';
+                    messageInput.focus();
+                }
+            });
+
+            socket.on('connect', () => messageInput.disabled = false);
+            socket.on('disconnect', () => messageInput.disabled = true);
+            messageInput.disabled = !socket.connected;
+        });
+    </script>
+</head>
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h1>WhisperNet</h1>
+            <div class="status-bar">
+                <span id="user-status">Connecting...</span> | Your ID: <span id="user-id">Assigning...</span>
+            </div>
+        </header>
+        <div id="messages" class="messages-area"></div>
+        <footer class="chat-footer">
+            <form id="message-form" class="message-form">
+                <input type="text" id="message-input" placeholder="Type your anonymous message..." autocomplete="off" aria-label="Chat message input" required>
+                <button type="submit" aria-label="Send message">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+</body>
+</html>
